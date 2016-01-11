@@ -1,0 +1,132 @@
+Abaqus/Explicit 6.11-1                           DATE 11-Jan-2016  TIME 12:23:16
+-------------------------------------------------------------------------------
+  USER SUBROUTINE VUMAT
+-------------------------------------------------------------------------------
+
+
+***WARNING: A material defined in user subroutine VUMAT must be defined as
+            purely elastic (using the initial elastic modulus) at the
+            beginning of the analysis (stepTime=0). This is an informative
+            message. It does not necessarily indicate that user subroutine
+            VUMAT is incorrectly defined.
+
+
+-------------------------------------------------------------------------------
+ MODEL INFORMATION (IN GLOBAL X-Y COORDINATES)
+-------------------------------------------------------------------------------
+
+   Total mass in model = 2.0734
+   Center of mass of model = ( 3.333333E-02, 5.050000E+00)
+   For the axisymmetric body, the center of mass is located at the center of mass
+   of the circumferential slice.
+
+   Moments of Inertia :
+                 About Center of Mass              About Origin
+      I(XX)          1.731581E-03                  5.287987E+01
+      I(YY)          2.880656E-04                  2.591898E-03
+      I(XY)         -1.024986E-08                 -3.490306E-01
+      I(ZZ)          2.017640E-03                  5.288246E+01
+
+-------------------------------------------------------------------------------
+ STABLE TIME INCREMENT INFORMATION
+-------------------------------------------------------------------------------
+
+
+  The stable time increment estimate for each element is based on
+  linearization about the initial state.
+
+
+   Initial time increment = 4.96132E-08
+
+   Statistics for all elements:
+      Mean = 6.67441E-08
+      Standard deviation = 1.54468E-09
+
+   Most critical elements:
+    Element number   Rank    Time increment   Increment ratio
+   ----------------------------------------------------------
+           1          1       4.961325E-08      1.000000E+00
+           2          2       4.961325E-08      1.000000E+00
+           3          3       4.961325E-08      1.000000E+00
+           4          4       4.961325E-08      1.000000E+00
+           6          5       4.961325E-08      1.000000E+00
+           7          6       4.961325E-08      1.000000E+00
+           8          7       4.961325E-08      1.000000E+00
+           9          8       4.961325E-08      1.000000E+00
+          10          9       4.961325E-08      1.000000E+00
+          11         10       4.961325E-08      1.000000E+00
+
+
+Abaqus/Explicit 6.11-1                           DATE 11-Jan-2016  TIME 12:23:22
+
+The double precision Abaqus/Explicit executable will be used in this analysis.
+
+
+-------------------------------------------------------------------------------
+ SOLUTION PROGRESS
+-------------------------------------------------------------------------------
+
+ STEP 1  ORIGIN 0.0000
+
+  Total memory used for step 1 is approximately 24.9 megabytes.
+  Global time estimation algorithm will be used.
+  Scaling factor:  1.0000
+  Variable mass scaling factor at zero increment: 1.0000
+              STEP     TOTAL       CPU      STABLE    CRITICAL    KINETIC      TOTAL
+INCREMENT     TIME      TIME      TIME   INCREMENT     ELEMENT     ENERGY     ENERGY
+        0  0.000E+00 0.000E+00  00:00:00 4.961E-08          11  0.000E+00  0.000E+00
+ODB Field Frame Number      0 of     25 requested intervals at increment zero.
+       25  1.236E-06 1.236E-06  00:00:04 4.946E-08           7  6.630E+02 -6.616E+02
+ODB Field Frame Number      1 of     25 requested intervals at  1.235790E-06
+       49  2.423E-06 2.423E-06  00:00:07 4.948E-08          13  1.386E+03 -1.347E+03
+ODB Field Frame Number      2 of     25 requested intervals at  2.422886E-06
+       67  3.624E-06 3.624E-06  00:00:09 7.273E-08          20  2.113E+03 -2.010E+03
+ODB Field Frame Number      3 of     25 requested intervals at  3.624185E-06
+       84  4.861E-06 4.861E-06  00:00:11 7.273E-08          28  2.853E+03 -2.662E+03
+ODB Field Frame Number      4 of     25 requested intervals at  4.860618E-06
+      100  6.024E-06 6.024E-06  00:00:14 7.273E-08          35  3.541E+03 -3.249E+03
+ODB Field Frame Number      5 of     25 requested intervals at  6.024319E-06
+      117  7.261E-06 7.261E-06  00:00:16 7.273E-08          42  4.258E+03 -3.851E+03
+ODB Field Frame Number      6 of     25 requested intervals at  7.260751E-06
+      133  8.424E-06 8.424E-06  00:00:18 7.273E-08          49  4.913E+03 -4.406E+03
+ODB Field Frame Number      7 of     25 requested intervals at  8.424452E-06
+      150  9.661E-06 9.661E-06  00:00:21 7.273E-08          56  5.591E+03 -4.994E+03
+ODB Field Frame Number      8 of     25 requested intervals at  9.660885E-06
+      166  1.082E-05 1.082E-05  00:00:23 7.273E-08          63  6.227E+03 -5.546E+03
+ODB Field Frame Number      9 of     25 requested intervals at  1.082459E-05
+      183  1.206E-05 1.206E-05  00:00:26 7.273E-08          70  6.913E+03 -6.126E+03
+ODB Field Frame Number     10 of     25 requested intervals at  1.206102E-05
+      199  1.322E-05 1.322E-05  00:00:28 7.273E-08          78  7.561E+03 -6.666E+03
+ODB Field Frame Number     11 of     25 requested intervals at  1.322472E-05
+      216  1.446E-05 1.446E-05  00:00:31 7.273E-08          85  8.243E+03 -7.242E+03
+ODB Field Frame Number     12 of     25 requested intervals at  1.446115E-05
+      232  1.562E-05 1.562E-05  00:00:33 7.273E-08          92  8.880E+03 -7.783E+03
+ODB Field Frame Number     13 of     25 requested intervals at  1.562485E-05
+      249  1.686E-05 1.686E-05  00:00:36 7.273E-08         100  9.480E+03 -8.425E+03
+ODB Field Frame Number     14 of     25 requested intervals at  1.686129E-05
+      265  1.802E-05 1.802E-05  00:00:38 7.273E-08          38  9.559E+03 -9.509E+03
+ODB Field Frame Number     15 of     25 requested intervals at  1.802499E-05
+      282  1.926E-05 1.926E-05  00:00:41 7.273E-08          87  9.600E+03 -1.070E+04
+ODB Field Frame Number     16 of     25 requested intervals at  1.926142E-05
+      298  2.043E-05 2.043E-05  00:00:43 7.273E-08           1  9.022E+03 -1.179E+04
+ODB Field Frame Number     17 of     25 requested intervals at  2.042512E-05
+      315  2.166E-05 2.166E-05  00:00:46 7.273E-08          21  7.851E+03 -1.285E+04
+ODB Field Frame Number     18 of     25 requested intervals at  2.166155E-05
+      331  2.283E-05 2.283E-05  00:00:48 7.273E-08          27  6.737E+03 -1.386E+04
+ODB Field Frame Number     19 of     25 requested intervals at  2.282526E-05
+      348  2.406E-05 2.406E-05  00:00:50 7.273E-08          33  5.474E+03 -1.504E+04
+ODB Field Frame Number     20 of     25 requested intervals at  2.406169E-05
+      364  2.523E-05 2.523E-05  00:00:53 7.273E-08          38  4.223E+03 -1.621E+04
+ODB Field Frame Number     21 of     25 requested intervals at  2.522539E-05
+      381  2.646E-05 2.646E-05  00:00:55 7.273E-08          45  2.846E+03 -1.751E+04
+ODB Field Frame Number     22 of     25 requested intervals at  2.646182E-05
+      397  2.763E-05 2.763E-05  00:00:58 7.273E-08          39  1.627E+03 -1.866E+04
+ODB Field Frame Number     23 of     25 requested intervals at  2.762552E-05
+      414  2.886E-05 2.886E-05  00:01:00 7.273E-08          58  1.574E+03 -1.864E+04
+ODB Field Frame Number     24 of     25 requested intervals at  2.886196E-05
+      430  3.000E-05 3.000E-05  00:01:03 7.273E-08          30  1.771E+03 -1.837E+04
+Restart Number  1 at 3.00000E-05
+ODB Field Frame Number     25 of     25 requested intervals at  3.000000E-05
+
+  THE ANALYSIS HAS COMPLETED SUCCESSFULLY
+
