@@ -48,14 +48,16 @@ C----+-----------------------------------------------------------------+
       COMMON /path/ kmax,kount,dxsav,xp,yp
       dimension xp(KMAXX),yp(NMAX,KMAXX)
       common/ceramic/den,xnu,es,xkic,d0,
-     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/stressu/stress(6),se,sm
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
       common/params2/fitKICD
       common/timeinc/ddt,xitime
       common/defg/yold(nmax),stnew(6),stold(6),dfnew(9),dfold(9)
- 	  common/reg/regime
+ 	    common/reg/regime
+c     CHANGES FOR UNDRAINED DEFORMATION            
+      common/pressure/p_f,d_p,biot
 C----+-----------------------------------------------------------------+
       den    = props(1)
       xnu    = props(2)
@@ -70,10 +72,23 @@ C----+-----------------------------------------------------------------+
       xlodot = props(11)
       xxm    = props(12)
       flag   = props(13)
+
+c     CHANGES FOR UNDRAINED DEFORMATION      
+c     this is the biot coefficient      
+      biot   = props(14)
+c     this is the drained bulk modulus of the solid
+      K_d    = props(15)
+c     this is the bulk modulus of the fluid
+      K_f    = props(16)
+c     this is the initial porosity used for evaluation
+c     of the undrained bulk modulus
+      phi_0 = props(17)
+c     this is the initial pore fluid pressure 
+      p_0 = props(18)
 C----+-----------------------------------------------------------------+
-	  fitKICD = 5.0e9
-	  psi = 0.5*atan(1/xfric)
-	  alpha = cos(psi)
+	    fitKICD = 5.0e9
+	    psi = 0.5*atan(1/xfric)
+	    alpha = cos(psi)
       ntens=ndir+nshr
       nvar=1
       eps=1.0e-0
@@ -87,21 +102,35 @@ C----+-----------------------------------------------------------------+
       third=1.0/3.0
       a=(3.0*d0/(4.0*pi*alpha**3*xf))**third
       sigf=xkic/sqrt(pi*a)
+
+c     CHANGES FOR UNDRAINED DEFORMATION      
+c     this is the solid bulk modulus
+      K_s = es / (3.0 * (1 - 2.0 *xnu))
+c     this is the undrained bulk modulus
+      K_u = K_d  + biot * biot * K_s * K_f 
+     1 / (phi_0 * K_s + (biot - phi_0) * K_f)  
+
+
 C----+-----------------------------------------------------------------+
 
       if (totaltime.eq.0.0) then
 
 
        do i=1,nblock
+c         CHANGES FOR UNDRAINED DEFORMATION          
+
            stressnew(i,1)=stressold(i,1)+
      1         2.0*g*(straininc(i,1)+(xnu/(1.0-2.0*xnu))*
      1         (straininc(i,1)+straininc(i,2)+straininc(i,3)))
+     1         - biot * p_0
           stressnew(i,2)=stressold(i,2)+
      1        2.0*g*(straininc(i,2)+(xnu/(1.0-2.0*xnu))*
      1        (straininc(i,1)+straininc(i,2)+straininc(i,3)))
+     1        - biot * p_0
           stressnew(i,3)=stressold(i,3)+
      1        2.0*g*(straininc(i,3)+(xnu/(1.0-2.0*xnu))*
      1        (straininc(i,1)+straininc(i,2)+straininc(i,3)))
+     1        - biot * p_0
           stressnew(i,4)=stressold(i,4)+2.0*g*straininc(i,4)
           stressnew(i,5)=stressold(i,5)+2.0*g*straininc(i,5)
           stressnew(i,6)=stressold(i,6)+2.0*g*straininc(i,6)
@@ -123,87 +152,80 @@ C----+-----------------------------------------------------------------+
 			 dfold(k1)=defgradold(ki,k1)
 		  enddo
 
-C	   do k1=ntens+1,ntens+nshr
-C	    dfnew(k1)=defgradnew(ki,k1)
-C	    dfold(k1)=defgradold(ki,k1)
-C	   enddo
-C	   call rotat
+      yold(1) = stateold(ki,ntens+1)
+      xldot   = stateold(ki,ntens+2)
+      xkold   = stateold(ki,ntens+3)
+      xkdotold   = stateold(ki,ntens+4)
+      xKICDold   = stateold(ki,ntens+5)
+c     CHANGES FOR UNDRAINED DEFORMATION      
+c      d_p = 0.0d0
+      p_f = stateold(ki,ntens+10)        
 
+      if (xKICDold.lt.xkic) then
+        xKICDold = xkic
+      endif
 
-       yold(1) = stateold(ki,ntens+1)
-       xldot   = stateold(ki,ntens+2)
-       xkold   = stateold(ki,ntens+3)
-       xkdotold   = stateold(ki,ntens+4)
-       xKICDold   = stateold(ki,ntens+5)
+      xitime=x2time
+      xetime=xitime+dt
 
-       if (xKICDold.lt.xkic) then
-         xKICDold = xkic
-       endif
+      emax=0.0
 
-       xitime=x2time
-       xetime=xitime+dt
+      do k1=1,ntens
+        emax=max(emax,abs(straininc(ki,k1)/dt))
+      enddo
 
-       emax=0.0
+      if (emax.gt.0.0) then
+        dinit=(sigf/emax)/es/10.0
+          else
+        dinit=dt/10.0
+      endif
 
-           do k1=1,ntens
-              emax=max(emax,abs(straininc(ki,k1)/dt))
-           enddo
+      if (dinit.gt.dt/10.0) dinit=dt/10.0
 
-       if (emax.gt.0.0) then
-          dinit=(sigf/emax)/es/10.0
-           else
-          dinit=dt/10.0
-       endif
+      em = 0.0
+      ex = 0.0
 
-
-       if (dinit.gt.dt/10.0) dinit=dt/10.0
-
-       em = 0.0
-       ex = 0.0
-
-       call odeint(yold,nvar,xitime,xetime,eps,dinit,qzer,nok,
+      
+      call odeint(yold,nvar,xitime,xetime,eps,dinit,qzer,nok,
      +     nbad,derivs,rkqs)
 
 
-       do k1=1,ntens
-          statenew(ki,k1)=strain(k1)+straininc(ki,k1)
-       enddo
+      do k1=1,ntens
+        statenew(ki,k1)=strain(k1)+straininc(ki,k1)
+      enddo
 
-       if (yold(1).ge.0.9999) yold(1)=0.9999
-       if (yold(1).le.d0) yold(1)=d0
+      if (yold(1).ge.0.9999) yold(1)=0.9999
+      if (yold(1).le.d0) yold(1)=d0
 
-       statenew(ki,ntens+1) = yold(1)
-       statenew(ki,ntens+2) = xldot
+      statenew(ki,ntens+1) = yold(1)
+      statenew(ki,ntens+2) = xldot
 
 C----+-----------------------------------------------------------------+
 c       calculate updated stress
 C----+-----------------------------------------------------------------+
 
-       pi=2.0*asin(1.0)
-       third=1.0/3.0
-       a=(3.0*d0/(4.0*pi*alpha**3*xf))**third
-       g=es/(2.0*(1.0+xnu))
+      pi=2.0*asin(1.0)
+      third=1.0/3.0
+      a=(3.0*d0/(4.0*pi*alpha**3*xf))**third
+      g=es/(2.0*(1.0+xnu))
+      d=yold(1)
+      d=d/d0
+      f1=pi*alpha**(1.5)*(d**third-1.0+beta/alpha)**(0.5)
+      f1=sqrt(1.0-alpha**2.0)/f1
 
-       d=yold(1)
-
-       d=d/d0
-
-       f1=pi*alpha**(1.5)*(d**third-1.0+beta/alpha)**(0.5)
-       f1=sqrt(1.0-alpha**2.0)/f1
-
-       f2=(sqrt(1.0-alpha**2.0)/(alpha**2.0))*
+      f2=(sqrt(1.0-alpha**2.0)/(alpha**2.0))*
      +    (1.0/(1.0/d0**(2.0/3.0)-d**(2.0/3.0)))
 
-       f3=(2.0*alpha**0.5/pi)*(d**third-1.0)**0.5
+      f3=(2.0*alpha**0.5/pi)*(d**third-1.0)**0.5
 
-       bb=f1+f2*f3
-       aa=xfric*bb + f2*f3
-       cc=aa+gammat*sqrt(alpha*d**third)
-       ee=bb*cc/sqrt(cc**2-aa**2)
+      bb=f1+f2*f3
+      aa=xfric*bb + f2*f3
+      cc=aa+gammat*sqrt(alpha*d**third)
+      ee=bb*cc/sqrt(cc**2-aa**2)
 
-       do i=1,ntens
-          estrain(i)=statenew(ki,i)
-       enddo
+      do i=1,ntens
+        estrain(i)=statenew(ki,i)
+      enddo
 
       call upstress
 
@@ -211,32 +233,32 @@ C----+-----------------------------------------------------------------+
       test1=-bb/aa*se
       test2=aa*bb/(cc**2-aa**2)*se
 C----+-----------------------------------------------------------------+
-	  factx = sqrt(pi*d0*(1.0-xnu)/(alpha**3.0))
+	    factx = sqrt(pi*d0*(1.0-xnu)/(alpha**3.0))
       aa1 = aa*factx
       bb1 = bb*factx
       facty = 3.0*(1.0-2.0*xnu)/(2.0*(1.0+xnu))
-	  convexloss=1.0e6
+	    convexloss=1.0e6
 C----
-	   d=1
+	    d=1
 C----
-       f10=pi*alpha**(1.5)*(d**third-1.0+beta/alpha)**(0.5)
-       f10=sqrt(1.0-alpha**2.0)/f10
+      f10=pi*alpha**(1.5)*(d**third-1.0+beta/alpha)**(0.5)
+      f10=sqrt(1.0-alpha**2.0)/f10
 C----
-       f20=(sqrt(1.0-alpha**2.0)/(alpha**2.0))*
+      f20=(sqrt(1.0-alpha**2.0)/(alpha**2.0))*
      +    (1.0/(1.0/d0**(2.0/3.0)-d**(2.0/3.0)))
 C----
-       f30=(2.0*alpha**0.5/pi)*(d**third-1.0)**0.5
+      f30=(2.0*alpha**0.5/pi)*(d**third-1.0)**0.5
 C----
-       bb0=f10+f20*f30
-       aa0=xfric*bb0 + f20*f30
+      bb0=f10+f20*f30
+      aa0=xfric*bb0 + f20*f30
 C----
-       aa10 = aa0*factx
-       bb10 = bb0*factx
+      aa10 = aa0*factx
+      bb10 = bb0*factx
 C----
       convexlossD = (facty+0.5*facty*bb1**2*+0.5*aa1**2.0)
-	  convexloss0 = (facty+0.5*facty*bb10**2*+0.5*aa10**2.0)
+	    convexloss0 = (facty+0.5*facty*bb10**2*+0.5*aa10**2.0)
 C----
-	  convexloss = convexloss0/convexlossD
+	    convexloss = convexloss0/convexlossD
 C----+
 C----+	  if (convexloss.le.0.1) then
 C----+		statenew(ki,ntens+1) = stateold(ki,ntens+1)
@@ -254,13 +276,16 @@ C----+	  endif
        	endif
       endif
 
- 	  statenew(ki,ntens+3) = xk
- 	  statenew(ki,ntens+4) = xkdot
- 	  statenew(ki,ntens+5) = xKICD
- 	  statenew(ki,ntens+6) = regime
- 	  statenew(ki,ntens+7) = aa
- 	  statenew(ki,ntens+8) = bb
- 	  statenew(ki,ntens+9) = convexloss
+      statenew(ki,ntens+3) = xk
+      statenew(ki,ntens+4) = xkdot
+      statenew(ki,ntens+5) = xKICD
+      statenew(ki,ntens+6) = regime
+      statenew(ki,ntens+7) = aa
+      statenew(ki,ntens+8) = bb 
+      statenew(ki,ntens+9) = convexloss
+      statenew(ki,ntens+10)= p_f + d_p
+c      statenew(ki,ntens+10) = 1.00e+06
+
 
        do k1=1,ntens
           stressnew(ki,k1)=stress(k1)
@@ -277,44 +302,54 @@ C----+-----------------------------------------------------------------+
       parameter (nmax=50)
       dimension y(nmax),dydx(nmax)
       common/ceramic/den,xnu,es,xkic,d0,
-     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
       common/timeinc/dt,xitime
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/stressu/stress(6),se,sm
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
       common/params2/fitKICD
+c     CHANGES FOR UNDRAINED DEFORMATION            
+      common/pressure/p_f,d_p,biot
 
 
 
-       pi=2.0*asin(1.0)
-       third=1.0/3.0
-       a=(3.0*d0/(4.0*pi*alpha**3*xf))**third
-       g=es/(2.0*(1.0+xnu))
 
- 	   d=y(1)
+      pi=2.0*asin(1.0)
+      third=1.0/3.0
+      a=(3.0*d0/(4.0*pi*alpha**3*xf))**third
+      g=es/(2.0*(1.0+xnu))
 
-	   if (d.ge.0.9999) d=0.9999
-	   if (d.le.d0) d=d0
+ 	    d=y(1)
 
-	   d=d/d0
+c     keep the damage parameters in the proper bounds
+	    if (d.ge.0.9999) d=0.9999
+	    if (d.le.d0) d=d0
 
-       f1=pi*alpha**(0.5)*(d**third-1.0+beta/alpha)**(0.5)
-       f1=sqrt(1.0-alpha**2.0)/f1
+c     normalize the damage parameter
+	    d=d/d0
 
-       f2=(sqrt(1.0-alpha**2.0)/(alpha**2.0))*
+      f1=pi*alpha**(0.5)*(d**third-1.0+beta/alpha)**(0.5)
+      f1=sqrt(1.0-alpha**2.0)/f1
+
+      f2=(sqrt(1.0-alpha**2.0)/(alpha**2.0))*
      +    (1.0/(1.0/d0**(2.0/3.0)-d**(2.0/3.0)))
 
-       f3=(2.0*alpha**0.5/pi)*(d**third-1.0)**0.5
+      f3=(2.0*alpha**0.5/pi)*(d**third-1.0)**0.5
 
-       bb=f1+f2*f3
-       aa=xfric*bb + f2*f3
-       cc=aa+gammat*sqrt(alpha*d**third)
-       ee=bb*cc/sqrt(cc**2-aa**2)
+      bb=f1+f2*f3
+      aa=xfric*bb + f2*f3
+      cc=aa+gammat*sqrt(alpha*d**third)
+      ee=bb*cc/sqrt(cc**2-aa**2)
 
-
+c     at each sub-time step in the RK solver, evalutate the
+c     new strain. (e.g. divide the strain increment for RK2)
       do i=1,4
       	estrain(i)=strain(i)+(x-xitime)/dt*xstrain(i)
       enddo
+c     CHANGES FOR UNDRAINED DEFORMATION            
+c     update the pore fluid pressure
+      d_p = - (estrain(1) + estrain(2) + estrain(3))
+     1      /  (biot / (K_u - K_d  )  )
 
       call upstress
 
@@ -408,12 +443,14 @@ C----+-----------------------------------------------------------------+
       subroutine getrupturevelocity
       include 'vaba_param.inc'
       common/ceramic/den,xnu,es,xkic,d0,
-     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
       common/params2/fitKICD
       common/timeinc/ddt,xitime
       common/ntensor/nndir,nnshr,ntens
+
+
 C----
 C----
       g=es/(2.0*(1.0+xnu))
@@ -421,7 +458,7 @@ C----
       CS = sqrt(g/den)
       CR = 0.92*CS
       a00 = 1.0/vm**5.0
-	  b00 = xk/(xKIC*CR)
+	    b00 = xk/(xKIC*CR)
       c00 = (1.0-xk/xKIC)
 C----
       DL = 1.0E-4
@@ -430,14 +467,14 @@ C----
       DX = 1.0
 C----
       DO 164  WHILE (ABS(DX).GT.DL)
-		FX0  = a00*x00**5+b00*x00+c00
-		DFX0 = 5.0*a00*x00**4+b00
+		    FX0  = a00*x00**5+b00*x00+c00
+		    DFX0 = 5.0*a00*x00**4+b00
         x10 = x00 - FX0/DFX0
         DX = x10 - x00
         x00 = x10
   164 END DO
 C----
-	  if (x10.gt.vm) then
+	    if (x10.gt.vm) then
 	     xldot = vm
       else if (x10.lt.0.0) then
          xldot = 0.0
@@ -453,11 +490,15 @@ C----+C----+-----------------------------------------------------------------+
       subroutine upstress
       include 'vaba_param.inc'
       common/ceramic/den,xnu,es,xkic,d0,
-     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
       common/params2/fitKICD
       common/reg/regime
+c     CHANGES FOR UNDRAINED DEFORMATION            
+      common/pressure/p_f,d_p,biot
+
+
 
       g=es/(2.0*(1.0+xnu))
       pi=2.0*asin(1.0)
@@ -507,17 +548,23 @@ C----+-----------------------------------------------------------------+
       subroutine hooke
       include 'vaba_param.inc'
       common/ceramic/den,xnu,es,xkic,d0,
-     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/stressu/stress(6),se,sm
+c     CHANGES FOR UNDRAINED DEFORMATION            
+      common/pressure/p_f,d_p,biot
 
       g=es/(2.0*(1.0+xnu))
 
+          
       sm=2.0*(1+xnu)*g/(3.0*(1.0-2.0*xnu))*em
       se=g*ex
 
       do i=1,3
-       stress(i)=2.0*g*estrain(i)+3.0*xnu*sm/(1.0+xnu)
+c     CHANGES FOR UNDRAINED DEFORMATION            
+        stress(i) = 2.0 * g * estrain(i) 
+     1            + 3.0 * xnu * sm / (1.0 + xnu) 
+     1            - biot * (p_f + d_p)
       enddo
 
       do i=1,3
@@ -530,11 +577,14 @@ C----+-----------------------------------------------------------------+
       subroutine quadk
       include 'vaba_param.inc'
       common/ceramic/den,xnu,es,xkic,d0,
-     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/stressu/stress(6),se,sm
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
       common/params2/fitKICD
+c     CHANGES FOR UNDRAINED DEFORMATION            
+      common/pressure/p_f,d_p,biot
+
 
       g=es/(2.0*(1.0+xnu))
       pi=2.0*asin(1.0)
@@ -550,17 +600,18 @@ C----
       cc1 = cc*fac1
       ee1 = ee*fac1
 C----
-	  temp0 = 1.0+ee1**2/2.0
-	  temp1 = 3.0*xnu/(1.0+xnu) + ee1**2/2.0 - cc1**2/3.0
+	    temp0 = 1.0+ee1**2/2.0
+	    temp1 = 3.0*xnu/(1.0+xnu) + ee1**2/2.0 - cc1**2/3.0
 
 C----
       do i=1,3
-       stress(i)=(2.0*g*estrain(i) + temp1*sm)/temp0
+c     CHANGES FOR UNDRAINED DEFORMATION            
+       stress(i)=(2.0*g*estrain(i) + temp1*sm)/temp0 - biot*(p_f+d_p)
       enddo
 C----
       do i=1,3
        stress(i+3)=(2.0*g*estrain(i))/temp0
- 	  enddo
+ 	    enddo
 
       return
       end
@@ -568,18 +619,21 @@ C----+-----------------------------------------------------------------+
       subroutine ashbys
       include 'vaba_param.inc'
       common/ceramic/den,xnu,es,xkic,d0,
-     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/stressu/stress(6),se,sm
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
       common/params2/fitKICD
+c     CHANGES FOR UNDRAINED DEFORMATION      
+      common/pressure/p_f,d_p,biot
+
 
       g=es/(2.0*(1.0+xnu))
       pi=2.0*asin(1.0)
 
       fac3 = sqrt(pi*d0*(1.0-xnu)/(alpha**3))
-	  aa1 = aa*fac3
-	  bb1 = bb*fac3
+	    aa1 = aa*fac3
+	    bb1 = bb*fac3
 
       det=3.0*(1.0-2.0*xnu)/(2.0*(1.0+xnu))+aa1**2/2.0+
      1    3.0*(1.0-2.0*xnu)/(4.0*(1.0+xnu))*bb1**2
@@ -591,18 +645,19 @@ C----+-----------------------------------------------------------------+
       sm = g*(tempa1*em+tempb1*ex)
       se = g*(tempb1*em+tempb2*ex)
 
-	  tempfacsig = (3.0*xnu*se/(1.0+xnu) + aa1*bb1*sm/(2.0))
-	  tempfacsig = tempfacsig - aa1**2*se/3.0 + bb1**2*se/2.0
-	  tempfacsig = tempfacsig*sm
+	    tempfacsig = (3.0*xnu*se/(1.0+xnu) + aa1*bb1*sm/(2.0))
+	    tempfacsig = tempfacsig - aa1**2*se/3.0 + bb1**2*se/2.0
+	    tempfacsig = tempfacsig*sm
 
-	  tempfactau = aa1*bb1*se**2/3.0
+	    tempfactau = aa1*bb1*se**2/3.0
 
-	  tempfacs = (se+aa1*bb1*sm/(2.0) + bb1**2*se/2.0)
+	    tempfacs = (se+aa1*bb1*sm/(2.0) + bb1**2*se/2.0)
 
 
       do i=1,3
+c     CHANGES FOR UNDRAINED DEFORMATION            
        stress(i) = 2.0*g*se*estrain(i) + tempfacsig - tempfactau
-       stress(i) = stress(i)/tempfacs
+       stress(i) = stress(i)/tempfacs - biot*(p_f + d_p)
       enddo
 
       do i=1,3
