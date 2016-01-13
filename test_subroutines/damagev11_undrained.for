@@ -49,6 +49,7 @@ C----+-----------------------------------------------------------------+
       dimension xp(KMAXX),yp(NMAX,KMAXX)
       common/ceramic/den,xnu,es,xkic,d0,
      +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
+     +        phi_0
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/stressu/stress(6),se,sm
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
@@ -58,7 +59,7 @@ C----+-----------------------------------------------------------------+
  	    common/reg/regime
 c     CHANGES FOR UNDRAINED DEFORMATION            
       common/pressure/p_f,p_int,biot
-      real avg_stress, avg_strain
+      double precision avg_stress, avg_strain, perm, p_f_update
       dimension avg_stress(1,4), avg_strain(1,4) 
 
 C----+-----------------------------------------------------------------+
@@ -298,6 +299,8 @@ c     in this case replace by the previous value
           stressnew(ki,k1)=stress(k1)
       enddo
 
+      call get_permeability(regime, perm)
+      statenew(ki,ntens+11 ) = perm
 
  100   continue
 
@@ -333,26 +336,26 @@ c
 c        endif
 c      enddo
 
-      do ki = 1, nblock 
-        if (ki.eq.1) then
-c         update state variables          
-          do i = 1, ntens
-          statenew(ki,ntens + 10 + i) = 100
-          statenew(ki,ntens + 14 + i) = 200
-          enddo
-        else 
-c         use the average stress and strain field
-c         calculated from the first element to update the otehr
-c         elements
-
-c         update state variables          
-          do i = 1, ntens
-          statenew(ki,ntens + 10 + i) = statenew(1,ntens + 10 + i)
-          statenew(ki,ntens + 14 + i) = statenew(1,ntens + 10 + i)
-          enddo
-
-        endif
-      enddo
+c      do ki = 1, nblock 
+c        if (ki.eq.1) then
+cc         update state variables          
+c          do i = 1, ntens
+c          statenew(ki,ntens + 10 + i) = 100
+c          statenew(ki,ntens + 14 + i) = 200
+c          enddo
+c        else 
+cc         use the average stress and strain field
+cc         calculated from the first element to update the otehr
+cc         elements
+c
+cc         update state variables          
+c          do i = 1, ntens
+c          statenew(ki,ntens + 10 + i) = statenew(1,ntens + 10 + i)
+c          statenew(ki,ntens + 14 + i) = statenew(1,ntens + 14 + i)
+c          enddo
+c
+c        endif
+c      enddo
 
 
       return
@@ -1046,6 +1049,62 @@ c
  130  continue
       return
       end
+
+C----+-----------------------------------------------------------------+
+      subroutine get_permeability(regime,perm)
+      include 'vaba_param.inc'
+      double precision perm, regime
+
+C----+-----------------------------------------------------------------+
+C                  SUBROUTINE: FOR EVALUATION OF 
+C                  THE PERMEABILITY AT EACH POINT
+C----+-----------------------------------------------------------------+
+      
+c     first find the regime
+      perm = regime    
+      
+      return
+      end 
+
+C----+-----------------------------------------------------------------+
+      subroutine average_stress_strain(stressnew, statenew , nblock,
+     1    ntens, nstatev, avg_stress, avg_strain )
+      include 'vaba_param.inc'
+c      integer nblock, ntens , nstatev
+c      real, intent(in), dimension(nblock,ntens) :: stressnew
+c      real, intent(in), dimension(nblock,nstatev) :: statenew
+c      real, intent(out), dimension(1,ntens) :: avg_stress
+c      real, intent(out), dimension(1, ntens) :: avg_strain
+
+      integer nblock, ntens, nstatev
+      double precision stress new, statenew, avg_stress, avg_strain
+      dimension stressnew(nblock,ntens), statenew(nblock,nstatev),
+     1          avg_stress(1,ntens), avg_strain(1,ntens) 
+
+
+C----+-----------------------------------------------------------------+
+C                  SUBROUTINE: FOR EVALUATION OF 
+C                  THE AVERAGE STRESS AND STRAIN
+C                  IN THE SAMPLE
+C----+-----------------------------------------------------------------+
+      
+c     initialize the average stress and strain
+      do i = 1, ntens
+        avg_stress(1, i) = 0.0
+        avg_strain(1,i) = 0.0
+      enddo       
+
+      do i = 1, ntens
+        do ki = 1, nblock
+          avg_stress(1,i) = avg_stress(1,i) + stressnew(ki,i)
+          avg_strain(1,i) = avg_strain(1,i) + statenew(ki,i)
+        enddo
+        avg_stress(1,i) = avg_stress(1,i) / nblock
+        avg_strain(1,i) = avg_strain(1,i) / nblock
+      enddo
+
+      return
+      end      
 C----+-----------------------------------------------------------------+
 C 							User subroutine VFRIC
 C----+-----------------------------------------------------------------+
@@ -1177,8 +1236,8 @@ C----+-----------------------------------------------------------------+
              	xmud=0.01
              else
                 xmus = props(1)
-	        xmud = props(2)
-	     end if
+	              xmud = props(2)
+	           end if
 
              fp = xmus*fn
              fr = xmud*fn
@@ -1201,42 +1260,9 @@ C----+-----------------------------------------------------------------+
       end
 
 
-C----+-----------------------------------------------------------------+
-      subroutine average_stress_strain(stressnew, statenew , nblock,
-     1    ntens, nstatev, avg_stress, avg_strain )
-      include 'vaba_param.inc'
-c      integer nblock, ntens , nstatev
-c      real, intent(in), dimension(nblock,ntens) :: stressnew
-c      real, intent(in), dimension(nblock,nstatev) :: statenew
-c      real, intent(out), dimension(1,ntens) :: avg_stress
-c      real, intent(out), dimension(1, ntens) :: avg_strain
-
-      integer nblock, ntens, nstatev
-      real stress new, statenew, avg_stress, avg_strain
-      dimension stressnew(nblock,ntens), statenew(nblock,nstatev),
-     1          avg_stress(1,ntens), avg_strain(1,ntens) 
+    
 
 
-C----+-----------------------------------------------------------------+
-C                  SUBROUTINE: FOR EVALUATION OF 
-C                  THE AVERAGE STRESS AND STRAIN
-C                  IN THE SAMPLE
-C----+-----------------------------------------------------------------+
-      
-c     initialize the average stress and strain
-      do i = 1, ntens
-        avg_stress(1, i) = 0.0
-        avg_strain(1,i) = 0.0
-      enddo       
 
-      do i = 1, ntens
-        do ki = 1, nblock
-          avg_stress(1,i) = avg_stress(1,i) + stressnew(ki,i)
-          avg_strain(1,i) = avg_strain(1,i) + statenew(ki,i)
-        enddo
-        avg_stress(1,i) = avg_stress(1,i) / nblock
-        avg_strain(1,i) = avg_strain(1,i) / nblock
-      enddo
 
-      return
-      end
+
