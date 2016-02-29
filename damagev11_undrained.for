@@ -49,6 +49,7 @@ C----+-----------------------------------------------------------------+
       dimension xp(KMAXX),yp(NMAX,KMAXX)
       common/ceramic/den,xnu,es,xkic,d0,
      +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
+     +        phi_0
       common/state/strain(6),xstrain(6),estrain(6),em,ex
       common/stressu/stress(6),se,sm
       common/params/aa,bb,cc,ee,xldot,xKICD,xkold,xk,xkdot
@@ -57,7 +58,11 @@ C----+-----------------------------------------------------------------+
       common/defg/yold(nmax),stnew(6),stold(6),dfnew(9),dfold(9)
  	    common/reg/regime
 c     CHANGES FOR UNDRAINED DEFORMATION            
-      common/pressure/p_f,p_int,biot
+      common/pressure/p_f,p_int,biot, k_min
+      double precision perm, p_f_update, theta_m, theta_m_old, k_min
+      dimension avg_stress(1,4), avg_strain(1,4) 
+      integer ki, nblock, ntens,i, k_p
+
 C----+-----------------------------------------------------------------+
       den    = props(1)
       xnu    = props(2)
@@ -85,8 +90,10 @@ c     of the undrained bulk modulus
       phi_0 = props(17)
 c     this is the initial pore fluid pressure 
       p_0 = props(18)
+c     minimum permeability
+      k_min = props(19)      
 C----+-----------------------------------------------------------------+
-	    fitKICD = 5.0e9
+	    fitKICD = 5.0e8
 	    psi = 0.5*atan(1/xfric)
 	    alpha = cos(psi)
       ntens=ndir+nshr
@@ -108,7 +115,7 @@ c     this is the solid bulk modulus
       K_s = es / (3.0 * (1 - 2.0 *xnu))
 c     this is the undrained bulk modulus
       K_u = K_d  + biot * biot * K_s * K_f 
-     1 / (phi_0 * K_s + (biot - phi_0) * K_f)  
+     1 / (phi_0 * K_s + (biot - phi_0) * K_f) 
 
 
 C----+-----------------------------------------------------------------+
@@ -291,22 +298,82 @@ c     in this case replace by the previous value
       endif
 
 
-       do k1=1,ntens
+      do k1=1,ntens
           stressnew(ki,k1)=stress(k1)
-       enddo
+      enddo
 
- 100    continue
 
- 200    continue
+C----+-----------------------------------------------------------------+
+c       calculate the permeability field
+C----+-----------------------------------------------------------------+ 
+c
+c      theta_m_old = stateold(ki, ntens + 12) 
+cC      call get_permeability(yold(1),theta_m_old,theta_m, perm)
+c      statenew(ki,ntens + 11 ) = perm
+c      statenew(ki, ntens + 12) = theta_m
+
+ 100   continue
+
+ 200   continue
+
+cc     update state variables          
+c      do ki=1, nblock
+c        do i = 1, ntens
+c          statenew(ki,ntens + 10 + i) = statenew(nblock,ntens + 10 + i)
+c          statenew(ki,ntens + 14 + i) = statenew(nblock,ntens + 14 + i)
+c        enddo 
+c      enddo
+
 
 C----+-----------------------------------------------------------------+
 c       calculate the average stress and strain
-C----+-----------------------------------------------------------------+
-      call average_stress_strain(stressnew, statenew , nblock,
-     1    ntens, nstatev, avg_stress, avg_strain )
-c     dump them into state variables
-      statenew(ki,ntens + 11 ) = avg_stress
-      statenew(ki,ntens + 12) = avg_strain      
+C----+-----------------------------------------------------------------+ 
+
+c       do ki = 1, nblock 
+c        if (ki.eq.1) then
+cc         Get the average stress and strain in the sample          
+c          call average_stress_strain(stressnew, statenew , nblock,
+c     1    ntens, nstatev, avg_stress, avg_strain )
+cc         update state variables          
+c          do i = 1, ntens
+c          statenew(ki,ntens + 10 + i) = avg_stress(1,i)
+c          statenew(ki,ntens + 14 + i) = avg_strain(1,i)
+c          enddo
+c        else 
+cc         use the average stress and strain field
+cc         calculated from the first element to update the otehr
+cc         elements
+c
+cc         update state variables          
+c          do i = 1, ntens
+c          statenew(ki,ntens + 10 + i) = statenew(1,ntens + 10 + i)
+c          statenew(ki,ntens + 14 + i) = statenew(ki,ntens + 10 + i)
+c          enddo
+c
+c        endif
+c      enddo
+
+C      do ki = 1, nblock 
+C        if (ki.eq.1) then
+Cc         update state variables          
+C          do i = 1, ntens
+C          statenew(ki,ntens + 10 + i) = 100.0
+C          statenew(ki,ntens + 14 + i) = 200.0
+C          enddo
+C        else 
+Cc         use the average stress and strain field
+Cc         calculated from the first element to update the otehr
+Cc         elements
+C
+Cc         update state variables          
+C          do i = 1, ntens
+C          statenew(ki,ntens + 10 + i) = statenew(1,ntens + 10 + i)
+C          statenew(ki,ntens + 14 + i) = statenew(1,ntens + 14 + i)
+C          enddo
+C
+C        endif
+C      enddo
+
 
       return
       end
@@ -999,6 +1066,161 @@ c
  130  continue
       return
       end
+
+C----+-----------------------------------------------------------------+
+      subroutine get_permeability(D , theta_m_old, theta_m ,perm)
+      include 'vaba_param.inc'
+      double precision perm, omega, apect_ratio, D, c, perc, a, pi
+     1                 ratio, theta_m, theta_m_old, e_plastic,
+     1                 sm , se, sd11, sd22, sd12, sd33
+      common/ceramic/den,xnu,es,xkic,d0,
+     +        xf,alpha,beta,gammat,xfric,vm,xlodot,xxm,flag,K_d,K_u
+     +        phi_0
+      common/reg/regime
+      common/params/aa,bb
+      common/stressu/stress(6)
+      common/pressure/k_min
+
+      pi = 2.0 * asin(1.0)
+c     initial crack size      
+      a = (3.0*d0/(4.0*pi*alpha**3*xf))**third
+c     shear modulus      
+      g = es/(2.0*(1.0+xnu))
+c     first invariant of the stress tensor
+      sm = 0.0
+      do i = 1,3
+        sm = sm + stress(i)
+      enddo
+c     second invariant of the stress tensor
+      sd11 = stress(1) - sm
+      sd22 = stress(2) - sm
+      sd12 = stress(4)
+      sd33 = stress(3) - sm
+      se = sqrt( 0.5 * sd11**two + sd22**two + sd33**two + sd12**2 )
+
+C----+-----------------------------------------------------------------+
+C                  SUBROUTINE: FOR EVALUATION OF 
+C                  THE PERMEABILITY AT EACH POINT
+C----+-----------------------------------------------------------------+
+
+c     evaluate the percolation factor
+      perc = (D - d0)/ (1 - d0)
+      
+      if (D.le.d0) then
+
+C----+-----------------------------------------------------------------+
+C                  REGIME 1
+C----+-----------------------------------------------------------------+
+
+c        omega = phi_0 / (xf * pi * a * a)
+c        apect_ratio = omega / (2 * a)
+c        theta_m = theta_m_old 
+c        perm = (4* pi) / 15 * perc * apect_ratio**third * xf * a**5
+
+        perm = k_min
+
+      else if (regime.le.2.0) then
+
+C----+-----------------------------------------------------------------+
+C                  REGIME 2
+C----+-----------------------------------------------------------------+      
+
+cc       evaluate c
+        ratio = D / d0
+        c = a * sqrt( 1 + alpha**two * (ratio**(2.0/3.0) - 1 ) )       
+c
+c       evaluate theta
+        theta_m = acos( sqrt(3*pi) * (1 - 2* xnu) * xkic / (8*sqrt(a)
+     1                *  (se * xfric * sm )  ) )
+c       ensure that \partial theta_m / \partial t >= 0        
+        if (theta_m.le.theta_m_old) then
+          theta_m = theta_m_old
+        endif
+
+c       evaluate omega 
+        e_plastic = (sm * aa**two + aa * bb * se ) / (2 * g )   
+        omega = 1/(xf * pi * c * c) * (  e_plastic +
+     1          phi_0 * (pi - 2* theta_m - sin(2* theta_m) ) / pi )
+
+c        sanity check that we are not in regime 1
+c        if (theta_m.le.0.0) then
+c          omega = phi_0 / (xf * pi * a * a)
+c        endif
+
+c       evaluate aspect ratio
+        apect_ratio = omega / (2 * c)
+
+c       evaluate permeability
+        perm = (4* pi) / 15 * perc * apect_ratio**third * xf * a**five
+
+        perm = perm
+      else 
+C----+-----------------------------------------------------------------+
+C                  REGIME 3
+C----+-----------------------------------------------------------------+
+cc       evaluate c
+        ratio = D / d0
+        c = a * sqrt( 1 + alpha**two * (ratio**(2.0/3.0) - 1 ) )       
+c
+c       evaluate theta
+        theta_m = acos( sqrt(3*pi) * (1 - 2* xnu) * xkic / (8*sqrt(a)
+     1                *  (se * xfric * sm )  ) )
+c       ensure that \partial theta_m / \partial t >= 0        
+        if (theta_m.le.theta_m_old) then
+          theta_m = theta_m_old
+        endif
+
+c       evaluate omega
+        e_plastic = (sm * aa**two + aa * bb * se ) / (2 * g )  
+        omega = 1/(xf * pi * c * c) * (e_plastic)
+
+
+
+        perm = -19
+      endif
+      
+      return
+      end 
+
+C----+-----------------------------------------------------------------+
+      subroutine average_stress_strain(stressnew, statenew , nblock,
+     1    ntens, nstatev, avg_stress, avg_strain )
+      include 'vaba_param.inc'
+c      integer nblock, ntens , nstatev
+c      real, intent(in), dimension(nblock,ntens) :: stressnew
+c      real, intent(in), dimension(nblock,nstatev) :: statenew
+c      real, intent(out), dimension(1,ntens) :: avg_stress
+c      real, intent(out), dimension(1, ntens) :: avg_strain
+
+      integer nblock, ntens, nstatev
+      double precision stress new, statenew, avg_stress, avg_strain
+      dimension stressnew(nblock,ntens), statenew(nblock,nstatev),
+     1          avg_stress(1,ntens), avg_strain(1,ntens) 
+
+
+C----+-----------------------------------------------------------------+
+C                  SUBROUTINE: FOR EVALUATION OF 
+C                  THE AVERAGE STRESS AND STRAIN
+C                  IN THE SAMPLE
+C----+-----------------------------------------------------------------+
+      
+c     initialize the average stress and strain
+      do i = 1, ntens
+        avg_stress(1, i) = 0.0
+        avg_strain(1,i) = 0.0
+      enddo       
+
+      do i = 1, ntens
+        do ki = 1, nblock
+          avg_stress(1,i) = avg_stress(1,i) + stressnew(ki,i)
+          avg_strain(1,i) = avg_strain(1,i) + statenew(ki,i)
+        enddo
+        avg_stress(1,i) = avg_stress(1,i) / nblock
+        avg_strain(1,i) = avg_strain(1,i) / nblock
+      enddo
+
+      return
+      end      
 C----+-----------------------------------------------------------------+
 C 							User subroutine VFRIC
 C----+-----------------------------------------------------------------+
@@ -1130,8 +1352,8 @@ C----+-----------------------------------------------------------------+
              	xmud=0.01
              else
                 xmus = props(1)
-	        xmud = props(2)
-	     end if
+	              xmud = props(2)
+	           end if
 
              fp = xmus*fn
              fr = xmud*fn
@@ -1154,35 +1376,9 @@ C----+-----------------------------------------------------------------+
       end
 
 
-C----+-----------------------------------------------------------------+
-      subroutine average_stress_strain(stressnew, statenew , nblock,
-     1    ntens, nstatev, avg_stress, avg_strain )
-      include 'vaba_param.inc'
-      integer, intent(in), nblock, ntens , nstatev
-      real, intent(in), dimension(nblock,ntens) :: stressnew
-      real, intent(in), dimension(nblock,nstatev) :: statenew
-      real, intent(out), dimension(1,ntens) :: avg_stress
-      real, intent(out), dimension(1, ntens) :: avg_strain
+    
 
 
-C----+-----------------------------------------------------------------+
-C                  SUBROUTINE: FOR EVALUATION OF 
-C                  THE AVERAGE STRESS AND STRAIN
-C                  IN THE SAMPLE
-C----+-----------------------------------------------------------------+
-      
-c     initialize the average stress and strain
-      do i = 1, ntens
-        avg_stress(1, i) = 0.0
-        avg_strain(1,i) = 0.0
-      enddo       
 
-      do i = 1, ntens
-        do ki = 1, nblock
-          avg_stress(1,i) = avg_stress(1,i) + stressnew(ki,i)
-          avg_strain(1,i) = avg_strain(1,i) + statenew(ki,i)
-        enddo
-      enddo
 
-      return
-      end
+
